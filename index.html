@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Top-Down RPG - Turn-Based Battle</title>
+    <meta name="viewport" content="width=1280, initial-scale=1">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" width="1280" height="960"></canvas>
+        <div id="ui-overlay"></div>
+    </div>
+    <script src="utils/constants.js"></script>
+    <script src="utils/SeededRNG.js"></script>
+    <script src="utils/utils.js"></script>
+    <script src="configs/gameConfig.js"></script>
+    <script src="managers/stateManager.js"></script>
+    <script src="entities/player.js"></script>
+    <script src="entities/enemies.js"></script>
+    <script src="entities/items.js"></script>
+    <script src="entities/npcs.js"></script>
+    <script src="entities/equipment.js"></script>
+    <script src="systems/inputSystem.js"></script>
+    <script src="systems/physicsSystem.js"></script>
+    <script src="systems/renderSystem.js"></script>
+    <script src="systems/collisionSystem.js"></script>
+    <script src="managers/sceneManager.js"></script>
+    <script src="ui/menus.js"></script>
+    <script src="ui/hud.js"></script>
+    <script src="ui/ui.js"></script>
+    <script src="core/gameManager.js"></script>
+    <script src="core/game.js"></script>
+</body>
+</html>
