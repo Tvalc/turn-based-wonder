@@ -5,7 +5,9 @@ class HUD {
     }
     render(player, enemy=null) {
         // Only show HUD if not blocked by menu (menuOpen is set on window.gameManager)
-        if (window.gameManager && window.gameManager.menuOpen) {
+        // --- Always show HUD in battle (even if menu is open), but hide in collision edit mode ---
+        const inBattle = window.gameManager && window.gameManager.stateManager.getState() === 'battle';
+        if (window.gameManager && window.gameManager.menuOpen && !inBattle) {
             this.clear();
             return;
         }
@@ -34,15 +36,37 @@ class HUD {
         gold.textContent = `Gold: ${player.gold}`;
         gold.style.marginTop = '4px';
         pPanel.appendChild(gold);
-        this.hudDiv.appendChild(pPanel);
+        // --- Show player stats in battle as well ---
+        if (inBattle) {
+            // Add attack, defense, speed in battle HUD
+            let statsDiv = document.createElement('div');
+            statsDiv.style.fontSize = '0.93em';
+            statsDiv.style.color = '#ccc';
+            statsDiv.style.marginTop = '4px';
+            statsDiv.innerHTML =
+                `<b>ATK:</b> ${player.getAttack()} &nbsp; ` +
+                `<b>DEF:</b> ${player.getDefense()} &nbsp; ` +
+                `<b>SPD:</b> ${player.maxStats.speed}`;
+            pPanel.appendChild(statsDiv);
+        }
         // Enemy panel (battle)
+        let ePanel = null;
         if (enemy) {
-            let ePanel = document.createElement('div');
+            ePanel = document.createElement('div');
             ePanel.className = 'hud-panel';
             ePanel.innerHTML = `<div class="hud-label">${enemy.name}</div>`;
             let hpBar = this.makeBar('hp', enemy.stats.hp, enemy.maxStats.hp, "HP");
             ePanel.appendChild(hpBar);
-            this.hudDiv.appendChild(ePanel);
+            // --- Show enemy stats in battle HUD ---
+            let statsDiv = document.createElement('div');
+            statsDiv.style.fontSize = '0.93em';
+            statsDiv.style.color = '#ccc';
+            statsDiv.style.marginTop = '4px';
+            statsDiv.innerHTML =
+                `<b>ATK:</b> ${enemy.stats.attack} &nbsp; ` +
+                `<b>DEF:</b> ${enemy.stats.defense} &nbsp; ` +
+                `<b>SPD:</b> ${enemy.stats.speed}`;
+            ePanel.appendChild(statsDiv);
         }
 
         // --- Move HUD below the canvas ---
@@ -60,6 +84,55 @@ class HUD {
                 this.hudDiv.style.width = 'auto';
             }
         }, 0);
+
+        // --- BATTLE HUD LAYOUT MODIFICATION ---
+        // If in battle, move HUD to the right and stack vertically (player on top, enemy below), right-aligned
+        if (inBattle && enemy) {
+            this.hudDiv.style.display = 'flex';
+            this.hudDiv.style.flexDirection = 'column';
+            this.hudDiv.style.alignItems = 'flex-end';
+            this.hudDiv.style.justifyContent = 'flex-start';
+            this.hudDiv.innerHTML = '';
+            // Move the panels to the right by 500px (was 300px, then 200px more)
+            let wrapper = document.createElement('div');
+            wrapper.style.display = 'flex';
+            wrapper.style.flexDirection = 'column';
+            wrapper.style.alignItems = 'flex-end';
+            wrapper.style.justifyContent = 'flex-start';
+            wrapper.style.position = 'relative';
+            // Move right by 500px
+            wrapper.style.right = '0px';
+            wrapper.style.marginRight = '0px'; // Ensure no extra margin
+            wrapper.style.left = '500px'; // Move the wrapper to the right by 500px
+            wrapper.appendChild(pPanel);
+            wrapper.appendChild(ePanel);
+            this.hudDiv.appendChild(wrapper);
+
+            // Move HUD to the right side of the screen, below the canvas
+            setTimeout(() => {
+                const gameContainer = document.getElementById('game-container');
+                if (gameContainer && this.hudDiv) {
+                    const rect = gameContainer.getBoundingClientRect();
+                    // Place HUD 18px below the canvas, aligned to the right edge with a margin
+                    // 32px margin from right edge of canvas, then move right by 500px more (total 532px)
+                    this.hudDiv.style.top = (rect.bottom + 18) + 'px';
+                    this.hudDiv.style.left = (rect.right - 32 + 500) + 'px'; // MOVED RIGHT BY 500px
+                    this.hudDiv.style.transform = 'translate(0, 0)';
+                    this.hudDiv.style.position = 'fixed';
+                    this.hudDiv.style.zIndex = '1010';
+                    this.hudDiv.style.width = 'auto';
+                }
+            }, 0);
+        } else {
+            // Overworld: default layout (horizontal, centered)
+            this.hudDiv.style.display = 'flex';
+            this.hudDiv.style.flexDirection = 'row';
+            this.hudDiv.style.alignItems = 'center';
+            this.hudDiv.style.justifyContent = 'center';
+            this.hudDiv.innerHTML = '';
+            this.hudDiv.appendChild(pPanel);
+            if (enemy) this.hudDiv.appendChild(ePanel);
+        }
     }
     makeBar(type, val, max, label) {
         let wrap = document.createElement('div');
