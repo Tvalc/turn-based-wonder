@@ -11,6 +11,9 @@
     --font: 'Segoe UI', 'Arial', sans-serif;
     --border-radius: 14px;
     --ui-glow: 0 0 12px hsl(200, 80%, 60%, 0.7);
+    --battle-btn-blue: #2980ef;
+    --battle-btn-blue-hover: #5fa8ff;
+    --battle-btn-blue-active: #1656a8;
 }
 
 html, body {
@@ -91,24 +94,34 @@ html, body {
     box-shadow: 0 8px 32px 0 hsl(220, 60%, 9%, 0.7), var(--shadow);
 }
 
-/* --- Battle menu panel at bottom --- */
+/* --- Battle menu panel: always below HUD, never on top of HUD or canvas --- */
 .battle-menu-panel {
     position: fixed !important;
+    /* Center under canvas: override left and transform */
     left: 50% !important;
-    /* Place below the canvas */
+    /* Place below the HUD, not on top of HUD or canvas */
     top: unset !important;
-    /* We'll set .battle-menu-panel's top in JS to be below #game-container */
+    /* We'll set .battle-menu-panel's top in JS to be below .ui-hud */
     transform: translate(-50%, 0) !important;
-    min-width: 480px;
-    max-width: 80vw;
+    min-width: 320px;
+    max-width: 60vw;
     width: auto;
-    padding: 22px 28px 14px 28px;
-    border-radius: 18px;
+    padding: 12px 16px 8px 16px;
+    border-radius: 14px;
     background: var(--panel);
     box-shadow: 0 6px 24px 0 hsl(220, 60%, 9%, 0.7);
     z-index: 30;
     opacity: 0.99;
     pointer-events: auto;
+    /* --- Ensure extra margin below HUD for clarity --- */
+    margin-top: 0 !important;
+    font-size: 1.02rem;
+}
+
+/* --- Extra margin for battle menu below HUD (for user request) --- */
+.battle-menu-panel {
+    /* The top is set by JS, but we can ensure extra space if needed */
+    margin-top: 0 !important;
 }
 
 /* --- UI PANEL FOCUS --- */
@@ -198,6 +211,13 @@ html, body {
     outline: none;
 }
 
+/* --- Make combat menu options smaller --- */
+.battle-menu-panel .ui-list.horizontal li {
+    padding: 7px 18px;
+    min-width: 60px;
+    font-size: 0.97rem;
+}
+
 /* --- HUD (player stats) BELOW CANVAS --- */
 .ui-hud {
     position: fixed; /* CHANGED from absolute to fixed */
@@ -279,17 +299,28 @@ html, body {
     }
     .battle-menu-panel {
         bottom: 4% !important;
-        padding: 12px 4vw 10px 4vw !important;
+        padding: 8px 2vw 6px 2vw !important;
+        min-width: 180px;
+        max-width: 95vw;
+        font-size: 0.95rem;
+        left: 50% !important;
+        transform: translate(-50%, 0) !important;
     }
     .ui-list.horizontal li {
         padding: 8px 8vw;
         min-width: 60px;
         font-size: 1.01rem;
     }
+    .battle-menu-panel .ui-list.horizontal li {
+        padding: 6px 8px;
+        min-width: 44px;
+        font-size: 0.92rem;
+    }
     .ui-hud {
-        left: 2vw;
+        left: 50% !important;
         top: unset !important;
         /* We'll set .ui-hud's top in JS, but provide fallback: */
+        transform: translate(-50%, 0) !important;
     }
 }
 
@@ -346,4 +377,28 @@ html, body {
         right: unset !important;
         /* We'll set top in JS to be below #game-container */
     }
+}
+
+/* --- BATTLE MENU BUTTONS: BLUE --- */
+.battle-menu-panel .ui-btn,
+.battle-menu-panel .battle-blue-btn {
+    background: var(--battle-btn-blue) !important;
+    color: #fff !important;
+    border: 2px solid var(--battle-btn-blue) !important;
+    box-shadow: 0 2px 8px 0 rgba(41,128,239,0.13);
+    transition: background 0.14s, border 0.14s, color 0.14s;
+}
+.battle-menu-panel .ui-btn:hover,
+.battle-menu-panel .ui-btn:focus,
+.battle-menu-panel .battle-blue-btn:hover,
+.battle-menu-panel .battle-blue-btn:focus {
+    background: var(--battle-btn-blue-hover) !important;
+    border-color: var(--battle-btn-blue-hover) !important;
+    color: #fff !important;
+}
+.battle-menu-panel .ui-btn:active,
+.battle-menu-panel .battle-blue-btn:active {
+    background: var(--battle-btn-blue-active) !important;
+    border-color: var(--battle-btn-blue-active) !important;
+    color: #fff !important;
 }
