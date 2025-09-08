@@ -17,14 +17,17 @@ class RenderSystem {
         this._loadPlayerIdleFrames();
 
         // --- ENEMY ANIMATION FRAMES CACHE ---
-        // { enemyId: { frames: [Image,...], loaded: bool } }
-        this.enemyAnimationFrames = {};
+        // { enemyId: { sets: {idle:[],attack:[],death:[]}, loaded: {idle:bool,attack:bool,death:bool} } }
+        this.enemyAnimationSets = {};
 
         // --- Overworld background image for first scene ---
         this.firstSceneBgUrl = "https://dcnmwoxzefwqmvvkpqap.supabase.co/storage/v1/object/public/sprite-studio-exports/0f84fe06-5c42-40c3-b563-1a28d18f37cc/library/RPG_BG2_1757183786053.png";
         this.firstSceneBgImg = null;
         this.firstSceneBgLoaded = false;
         this._loadFirstSceneBg();
+
+        // === DEBUGGING: Set to true to enable Karenbot attack frame logging ===
+        this.DEBUG_KAREN_ATTACK = true; // Set to false to disable debug logs
     }
 
     _loadPlayerIdleFrames() {
@@ -53,10 +56,39 @@ class RenderSystem {
         };
     }
 
-    // Load enemy animation frames if needed (for battle)
+    // Load enemy animation sets if needed (for battle)
+    _ensureEnemyAnimationSets(enemy) {
+        if (!enemy || !enemy.animationSets) return null;
+        if (!this.enemyAnimationSets[enemy.id]) {
+            let sets = {};
+            let loaded = { idle: false, attack: false, death: false };
+            let keys = Object.keys(enemy.animationSets);
+            keys.forEach(animType => {
+                let urls = enemy.animationSets[animType];
+                let frames = [];
+                let loadedCount = 0;
+                for (let i = 0; i < urls.length; ++i) {
+                    const img = new window.Image();
+                    img.src = urls[i];
+                    img.onload = () => {
+                        loadedCount++;
+                        if (loadedCount === urls.length) {
+                            loaded[animType] = true;
+                        }
+                    };
+                    frames.push(img);
+                }
+                sets[animType] = frames;
+            });
+            this.enemyAnimationSets[enemy.id] = { sets, loaded };
+        }
+        return this.enemyAnimationSets[enemy.id];
+    }
+
+    // For backward compatibility: load animationFrames for enemies that only have idle animation
     _ensureEnemyFrames(enemy) {
         if (!enemy || !enemy.animationFrames) return null;
-        if (!this.enemyAnimationFrames[enemy.id]) {
+        if (!this.enemyAnimationSets[enemy.id]) {
             // Start loading
             let frames = [];
             let loaded = 0;
@@ -67,14 +99,14 @@ class RenderSystem {
                 img.onload = () => {
                     loaded++;
                     if (loaded === urls.length) {
-                        this.enemyAnimationFrames[enemy.id].loaded = true;
+                        this.enemyAnimationSets[enemy.id].loaded = true;
                     }
                 };
                 frames.push(img);
             }
-            this.enemyAnimationFrames[enemy.id] = { frames, loaded: false };
+            this.enemyAnimationSets[enemy.id] = { sets: { idle: frames }, loaded: { idle: false } };
         }
-        return this.enemyAnimationFrames[enemy.id];
+        return this.enemyAnimationSets[enemy.id];
     }
 
     // Modified: Accept grid/collision info for rendering grid/collision overlay
@@ -193,21 +225,24 @@ class RenderSystem {
         const now = performance.now();
         const frameIdx = Math.floor(now / frameDuration) % frameCount;
 
+        // 1.5x scale factor for all sprites
+        const scale = 1.5;
+
         if (this.playerIdleFramesLoaded && this.playerIdleFrames[frameIdx]) {
             // Draw shadow (make it a bit bigger)
             ctx.save();
             ctx.globalAlpha = 0.33;
             ctx.beginPath();
-            ctx.ellipse(tx, ty + 20, 32, 14, 0, 0, Math.PI * 2);
+            ctx.ellipse(tx, ty + 20 * scale, 32 * scale, 14 * scale, 0, 0, Math.PI * 2);
             ctx.fillStyle = "#222";
             ctx.fill();
             ctx.restore();
 
             // Draw sprite centered
             const img = this.playerIdleFrames[frameIdx];
-            // Make sprite bigger: was 48x48, now 64x64
+            // Was 64x64, now 64*1.5=96x96
             ctx.save();
-            ctx.drawImage(img, tx - 32, ty - 40, 64, 64);
+            ctx.drawImage(img, tx - 48, ty - 60, 96, 96);
             ctx.restore();
 
             // Weapon overlay (if any)
@@ -229,14 +264,14 @@ class RenderSystem {
             ctx.save();
             // Glow/shadow
             ctx.shadowColor = "#3cf9f9";
-            ctx.shadowBlur = 24;
+            ctx.shadowBlur = 24 * scale;
             // Body
             ctx.beginPath();
-            ctx.arc(tx, ty-12, 28, 0, Math.PI*2, false);
+            ctx.arc(tx, ty-12 * scale, 28 * scale, 0, Math.PI*2, false);
             ctx.closePath();
             ctx.fillStyle = "url(#player-gradient)";
             // Fallback: procedural radial gradient
-            let grad = ctx.createRadialGradient(tx, ty-12, 6, tx, ty-12, 28);
+            let grad = ctx.createRadialGradient(tx, ty-12 * scale, 6 * scale, tx, ty-12 * scale, 28 * scale);
             grad.addColorStop(0, "#fff");
             grad.addColorStop(0.25, "#aef1e9");
             grad.addColorStop(0.7, "#3cf9f9");
@@ -246,15 +281,15 @@ class RenderSystem {
             ctx.shadowBlur = 0;
             // Eyes
             ctx.save();
-            ctx.translate(tx, ty-12);
+            ctx.translate(tx, ty-12 * scale);
             ctx.rotate(0.01*Math.sin(Date.now()/400));
             ctx.beginPath();
-            ctx.ellipse(-10, 4, 4, 8, 0, 0, Math.PI*2);
+            ctx.ellipse(-10 * scale, 4 * scale, 4 * scale, 8 * scale, 0, 0, Math.PI*2);
             ctx.closePath();
             ctx.fillStyle = "#111";
             ctx.fill();
             ctx.beginPath();
-            ctx.ellipse(10, 4, 4, 8, 0, 0, Math.PI*2);
+            ctx.ellipse(10 * scale, 4 * scale, 4 * scale, 8 * scale, 0, 0, Math.PI*2);
             ctx.closePath();
             ctx.fill();
             ctx.restore();
@@ -262,12 +297,12 @@ class RenderSystem {
             if (player.equipment && player.equipment.weapon) {
                 ctx.save();
                 ctx.beginPath();
-                ctx.moveTo(tx+18, ty+4);
-                ctx.lineTo(tx+28, ty-10);
-                ctx.lineWidth = 6;
+                ctx.moveTo(tx+18 * scale, ty+4 * scale);
+                ctx.lineTo(tx+28 * scale, ty-10 * scale);
+                ctx.lineWidth = 6 * scale;
                 ctx.strokeStyle = "#efc453";
                 ctx.shadowColor = "#efc453";
-                ctx.shadowBlur = 10;
+                ctx.shadowBlur = 10 * scale;
                 ctx.stroke();
                 ctx.restore();
             }
@@ -278,27 +313,28 @@ class RenderSystem {
     renderNPCs(map, npcs) {
         const { ctx } = this;
         const tileSize = GameConstants.tileSize;
+        const scale = 1.5;
         for (let npc of npcs) {
             let tx = npc.x * tileSize + tileSize/2, ty = npc.y * tileSize + tileSize/2;
             ctx.save();
             ctx.beginPath();
-            ctx.arc(tx, ty-7, 17, 0, Math.PI*2, false);
+            ctx.arc(tx, ty-7 * scale, 17 * scale, 0, Math.PI*2, false);
             ctx.closePath();
-            let grad = ctx.createRadialGradient(tx, ty-7, 3, tx, ty-7, 17);
+            let grad = ctx.createRadialGradient(tx, ty-7 * scale, 3 * scale, tx, ty-7 * scale, 17 * scale);
             grad.addColorStop(0, npc.palette[0]);
             grad.addColorStop(1, npc.palette[1]);
             ctx.fillStyle = grad;
             ctx.shadowColor = npc.palette[0];
-            ctx.shadowBlur = 7;
+            ctx.shadowBlur = 7 * scale;
             ctx.fill();
             ctx.shadowBlur = 0;
             // Face
             ctx.save();
-            ctx.translate(tx, ty-7);
+            ctx.translate(tx, ty-7 * scale);
             ctx.beginPath();
-            ctx.arc(0, 0, 7, 0, Math.PI, false);
+            ctx.arc(0, 0, 7 * scale, 0, Math.PI, false);
             ctx.strokeStyle = "#351f0e";
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 2 * scale;
             ctx.stroke();
             ctx.restore();
             ctx.restore();
@@ -308,25 +344,26 @@ class RenderSystem {
     renderItems(map, items) {
         const { ctx } = this;
         const tileSize = GameConstants.tileSize;
+        const scale = 1.5;
         for (let item of items) {
             let tx = item.x * tileSize + tileSize/2, ty = item.y * tileSize + tileSize/2;
             ctx.save();
             ctx.beginPath();
-            ctx.moveTo(tx, ty-10);
+            ctx.moveTo(tx, ty-10 * scale);
             for (let i = 1; i <= 5; ++i) {
                 let angle = Math.PI * 0.4 * i - Math.PI/2;
-                let r = (i%2===0)?14:7;
-                ctx.lineTo(tx + r*Math.cos(angle), ty - 10 + r*Math.sin(angle));
+                let r = (i%2===0)?14 * scale:7 * scale;
+                ctx.lineTo(tx + r*Math.cos(angle), ty - 10 * scale + r*Math.sin(angle));
             }
             ctx.closePath();
             // Glowing star
-            let grad = ctx.createRadialGradient(tx, ty-10, 3, tx, ty-10, 14);
+            let grad = ctx.createRadialGradient(tx, ty-10 * scale, 3 * scale, tx, ty-10 * scale, 14 * scale);
             grad.addColorStop(0, "#fffbe4");
             grad.addColorStop(0.5, "#e6e18c");
             grad.addColorStop(1, "#e6c23a");
             ctx.fillStyle = grad;
             ctx.shadowColor = "#e6c23a";
-            ctx.shadowBlur = 10;
+            ctx.shadowBlur = 10 * scale;
             ctx.fill();
             ctx.restore();
         }
@@ -429,11 +466,12 @@ class RenderSystem {
         const { ctx } = this;
         // Player
         this.renderBattlePlayer(player, anim && anim.target === "player" ? anim : null);
-        this.renderBattleEnemy(enemy, anim && anim.target === "enemy" ? anim : null);
+        this.renderBattleEnemy(enemy, anim && anim.target === "enemy" ? anim : null, anim);
     }
 
     renderBattlePlayer(player, anim) {
         const { ctx } = this;
+        // Was tx = 200, ty = 400
         let tx = 200, ty = 400;
 
         // --- Use animated idle sprite in battle as well ---
@@ -441,6 +479,9 @@ class RenderSystem {
         const frameDuration = 125; // ms per frame
         const now = performance.now();
         const frameIdx = Math.floor(now / frameDuration) % frameCount;
+
+        // 1.5x scale factor for all sprites
+        const scale = 1.5;
 
         ctx.save();
         if (anim && anim.type === "hurt") ctx.globalAlpha = 0.6 + 0.4*Math.sin(Date.now()/60);
@@ -450,15 +491,15 @@ class RenderSystem {
             ctx.save();
             ctx.globalAlpha = 0.33;
             ctx.beginPath();
-            ctx.ellipse(tx, ty + 36, 44, 18, 0, 0, Math.PI * 2);
+            ctx.ellipse(tx, ty + 36 * scale, 44 * scale, 18 * scale, 0, 0, Math.PI * 2);
             ctx.fillStyle = "#222";
             ctx.fill();
             ctx.restore();
 
-            // Draw sprite centered (make it bigger in battle: was 48x64, now 72x96)
+            // Draw sprite centered (was 72x96, now 108x144)
             const img = this.playerIdleFrames[frameIdx];
             ctx.save();
-            ctx.drawImage(img, tx - 36, ty - 48, 72, 96);
+            ctx.drawImage(img, tx - 54, ty - 72, 108, 144);
             ctx.restore();
 
             // Weapon overlay (if any)
@@ -479,11 +520,11 @@ class RenderSystem {
             // Fallback: old procedural circle (make it bigger)
             // Body
             ctx.shadowColor = "#3cf9f9";
-            ctx.shadowBlur = 24;
+            ctx.shadowBlur = 24 * scale;
             ctx.beginPath();
-            ctx.arc(tx, ty-12, 48, 0, Math.PI*2, false);
+            ctx.arc(tx, ty-12 * scale, 48 * scale, 0, Math.PI*2, false);
             ctx.closePath();
-            let grad = ctx.createRadialGradient(tx, ty-12, 10, tx, ty-12, 48);
+            let grad = ctx.createRadialGradient(tx, ty-12 * scale, 10 * scale, tx, ty-12 * scale, 48 * scale);
             grad.addColorStop(0, "#fff");
             grad.addColorStop(0.22, "#aef1e9");
             grad.addColorStop(0.68, "#3cf9f9");
@@ -493,14 +534,14 @@ class RenderSystem {
             ctx.shadowBlur = 0;
             // Eyes
             ctx.save();
-            ctx.translate(tx, ty-12);
+            ctx.translate(tx, ty-12 * scale);
             ctx.beginPath();
-            ctx.ellipse(-18, 6, 7, 14, 0, 0, Math.PI*2);
+            ctx.ellipse(-18 * scale, 6 * scale, 7 * scale, 14 * scale, 0, 0, Math.PI*2);
             ctx.closePath();
             ctx.fillStyle = "#111";
             ctx.fill();
             ctx.beginPath();
-            ctx.ellipse(18, 6, 7, 14, 0, 0, Math.PI*2);
+            ctx.ellipse(18 * scale, 6 * scale, 7 * scale, 14 * scale, 0, 0, Math.PI*2);
             ctx.closePath();
             ctx.fill();
             ctx.restore();
@@ -508,12 +549,12 @@ class RenderSystem {
             if (player.equipment && player.equipment.weapon) {
                 ctx.save();
                 ctx.beginPath();
-                ctx.moveTo(tx+28, ty+12);
-                ctx.lineTo(tx+48, ty-12);
-                ctx.lineWidth = 10;
+                ctx.moveTo(tx+28 * scale, ty+12 * scale);
+                ctx.lineTo(tx+48 * scale, ty-12 * scale);
+                ctx.lineWidth = 10 * scale;
                 ctx.strokeStyle = "#efc453";
                 ctx.shadowColor = "#efc453";
-                ctx.shadowBlur = 14;
+                ctx.shadowBlur = 14 * scale;
                 ctx.stroke();
                 ctx.restore();
             }
@@ -521,54 +562,198 @@ class RenderSystem {
         ctx.restore();
     }
 
-    renderBattleEnemy(enemy, anim) {
+    // Modified signature: add animFull (full anim object) as third argument for clarity
+    renderBattleEnemy(enemy, anim, animFull) {
         const { ctx } = this;
+        // Was tx = 600, ty = 320
         let tx = 600, ty = 320;
 
-        // --- Check for animation frames (Galactic Pirate) ---
-        let enemyAnim = this._ensureEnemyFrames(enemy);
+        // 1.5x scale factor for all sprites
+        const scale = 1.5;
+
+        // --- Check for animationSets (idle/attack/death) ---
         let usedAnim = false;
-        if (enemy && enemy.animationFrames && enemyAnim && enemyAnim.frames.length > 0) {
-            // Animation: use the number of frames in the array (broken frame removed)
-            const frameCount = enemy.animationFrames.length;
-            const frameDuration = 125;
+        let animSets = this._ensureEnemyAnimationSets(enemy);
+        if (enemy && enemy.animationSets && animSets && animSets.sets) {
+            let animType = "idle";
+
+            // --- BEGIN MODIFIED LOGIC FOR ATTACK ANIMATION ---
+            // If animFull is present and type is "hurt" and this is Roach or Karenbot, play attack animation
+            // Otherwise, play idle or death as before
+
+            // --- OVERRIDE: Always play attack animation for Roach Space Pirate and Karenbot when anim.type === "hurt" and anim.target === "player" ---
+            if (
+                animFull &&
+                animFull.type === "hurt" &&
+                animFull.target === "player" &&
+                (
+                    enemy.id === "goblin" // Roach Space Pirate
+                    || enemy.id === "karenbot" // Karenbot
+                ) &&
+                animSets.sets.attack && animSets.sets.attack.length > 0
+            ) {
+                animType = "attack";
+            } else if (animFull && animFull.type === "hurt") {
+                // If enemy is dead, play death
+                if (enemy.stats && enemy.stats.hp <= 0 && animSets.sets.death && animSets.sets.death.length > 0) {
+                    animType = "death";
+                }
+                else if (animSets.sets.attack && animSets.sets.attack.length > 0) {
+                    animType = "attack";
+                } else {
+                    animType = "idle";
+                }
+            }
+            // If enemy is dead, force death animation
+            if (enemy.stats && enemy.stats.hp <= 0 && animSets.sets.death && animSets.sets.death.length > 0) {
+                animType = "death";
+            }
+
+            // Animation: use the number of frames in the array
+            const frames = animSets.sets[animType];
+            const frameCount = frames.length;
+
+            // --- SLOW DOWN ALL ENEMY ANIMATIONS TO 1 FPS (1000ms per frame) ---
+            // --- SPECIAL CASE: For Karenbot attack animation, stretch total animation time to cover all frames within the battleAnimTime ---
+            let frameDuration;
+            let frameIdx;
             const now = performance.now();
-            const frameIdx = Math.floor(now / frameDuration) % frameCount;
+
+            // --- Special logic for Karenbot attack animation so all frames play within anim duration ---
+            if (
+                animType === "attack"
+                && enemy.id === "karenbot"
+                && animFull
+                && animFull.type === "hurt"
+                && animFull.target === "player"
+                && animFull.start
+            ) {
+                // Use the total anim duration to spread all frames evenly
+                // Use GameConstants.battleAnimTime if available, fallback to 500ms
+                let totalDuration = (window.GameConstants && window.GameConstants.battleAnimTime) ? window.GameConstants.battleAnimTime : 500;
+                // If user wants to see all frames, stretch the animation to fit all frames
+                // If totalDuration < frameCount*120, increase totalDuration to frameCount*120ms minimum
+                // --- FIX: For Karenbot, always force totalDuration to frameCount*120ms minimum ---
+                if (totalDuration < frameCount * 120) totalDuration = frameCount * 120;
+                frameDuration = totalDuration / frameCount;
+                let elapsed = Date.now() - animFull.start;
+                // --- FIX: Actually cycle through all frames, not just frame 0 ---
+                let idx = Math.floor(elapsed / frameDuration);
+                if (idx >= frameCount) idx = frameCount - 1;
+                frameIdx = idx;
+
+                // === DEBUGGING: Log Karenbot attack animation frames ===
+                if (this.DEBUG_KAREN_ATTACK) {
+                    if (!this._lastKarenFrameIdx || this._lastKarenFrameIdx !== frameIdx) {
+                        // Only log when frame changes
+                        this._lastKarenFrameIdx = frameIdx;
+                        // Print frame info and time
+                        // Show which frame, elapsed, total, and frame URL
+                        let url = frames[frameIdx] && frames[frameIdx].src ? frames[frameIdx].src : "(no url)";
+                        console.log(`[KAREN ATTACK DEBUG] Frame ${frameIdx+1}/${frameCount} | elapsed: ${elapsed}ms/${totalDuration}ms | url: ${url}`);
+                    }
+                }
+            }
+            // --- Special logic for Roach attack animation: same as above, but only for goblin id ---
+            else if (
+                animType === "attack"
+                && enemy.id === "goblin"
+                && animFull
+                && animFull.type === "hurt"
+                && animFull.target === "player"
+                && animFull.start
+            ) {
+                let totalDuration = (window.GameConstants && window.GameConstants.battleAnimTime) ? window.GameConstants.battleAnimTime : 500;
+                if (totalDuration < frameCount * 120) totalDuration = frameCount * 120;
+                frameDuration = totalDuration / frameCount;
+                let elapsed = Date.now() - animFull.start;
+                let idx = Math.floor(elapsed / frameDuration);
+                if (idx >= frameCount) idx = frameCount - 1;
+                frameIdx = idx;
+            }
+            // --- Death animation: play through frames, then hold last frame ---
+            else if (animType === "death" && enemy.stats && enemy.stats.hp <= 0) {
+                frameDuration = 1000;
+                if (animFull && animFull.start) {
+                    let elapsed = Date.now() - animFull.start;
+                    let idx = Math.floor(elapsed / frameDuration);
+                    if (idx >= frameCount) idx = frameCount - 1;
+                    frameIdx = idx;
+                } else {
+                    frameIdx = frameCount - 1;
+                }
+            }
+            // --- Default: idle and others ---
+            else {
+                frameDuration = 1000;
+                frameIdx = Math.floor(now / frameDuration) % frameCount;
+            }
 
             ctx.save();
-            if (anim && anim.type === "hurt") ctx.globalAlpha = 0.5 + 0.5*Math.abs(Math.sin(Date.now()/70));
+            if (animFull && animFull.type === "hurt") ctx.globalAlpha = 0.5 + 0.5*Math.abs(Math.sin(Date.now()/70));
 
             // Shadow
             ctx.save();
             ctx.globalAlpha = 0.33;
             ctx.beginPath();
-            ctx.ellipse(tx, ty + 28, 36, 14, 0, 0, Math.PI * 2);
+            ctx.ellipse(tx, ty + 28 * scale, 36 * scale, 14 * scale, 0, 0, Math.PI * 2);
             ctx.fillStyle = "#222";
             ctx.fill();
             ctx.restore();
 
-            // Draw sprite centered (bigger in battle)
-            const img = enemyAnim.frames[frameIdx];
-            // Use 64x80 for enemy sprite, adjust as needed
+            // Draw sprite centered (was 64x80, now 96x120)
+            const img = frames[frameIdx];
             ctx.save();
-            ctx.drawImage(img, tx - 32, ty - 56, 64, 80);
+            ctx.drawImage(img, tx - 48, ty - 84, 96, 120);
             ctx.restore();
 
             ctx.restore();
             usedAnim = true;
+        } else if (enemy && enemy.animationFrames) {
+            // Fallback: enemies with only animationFrames (Galactic Pirate)
+            let enemyAnim = this._ensureEnemyFrames(enemy);
+            if (enemyAnim && enemyAnim.sets && enemyAnim.sets.idle && enemyAnim.sets.idle.length > 0) {
+                const frames = enemyAnim.sets.idle;
+                const frameCount = frames.length;
+                // --- SLOW DOWN ALL ENEMY ANIMATIONS TO 1 FPS (1000ms per frame) ---
+                const frameDuration = 1000;
+                const now = performance.now();
+                const frameIdx = Math.floor(now / frameDuration) % frameCount;
+
+                ctx.save();
+                if (animFull && animFull.type === "hurt") ctx.globalAlpha = 0.5 + 0.5*Math.abs(Math.sin(Date.now()/70));
+
+                // Shadow
+                ctx.save();
+                ctx.globalAlpha = 0.33;
+                ctx.beginPath();
+                ctx.ellipse(tx, ty + 28 * scale, 36 * scale, 14 * scale, 0, 0, Math.PI * 2);
+                ctx.fillStyle = "#222";
+                ctx.fill();
+                ctx.restore();
+
+                // Draw sprite centered (was 64x80, now 96x120)
+                const img = frames[frameIdx];
+                ctx.save();
+                ctx.drawImage(img, tx - 48, ty - 84, 96, 120);
+                ctx.restore();
+
+                ctx.restore();
+                usedAnim = true;
+            }
         }
 
         // Fallback: procedural enemy (for non-animated enemies)
         if (!usedAnim) {
             ctx.save();
-            if (anim && anim.type === "hurt") ctx.globalAlpha = 0.5 + 0.5*Math.abs(Math.sin(Date.now()/70));
+            if (animFull && animFull.type === "hurt") ctx.globalAlpha = 0.5 + 0.5*Math.abs(Math.sin(Date.now()/70));
             // Body
             ctx.shadowColor = enemy.palette[0];
-            ctx.shadowBlur = 21;
+            ctx.shadowBlur = 21 * scale;
             ctx.beginPath();
-            ctx.arc(tx, ty-8, 38, 0, Math.PI*2, false);
+            ctx.arc(tx, ty-8 * scale, 38 * scale, 0, Math.PI*2, false);
             ctx.closePath();
-            let grad = ctx.createRadialGradient(tx, ty-8, 8, tx, ty-8, 38);
+            let grad = ctx.createRadialGradient(tx, ty-8 * scale, 8 * scale, tx, ty-8 * scale, 38 * scale);
             grad.addColorStop(0, enemy.palette[0]);
             grad.addColorStop(1, enemy.palette[1]);
             ctx.fillStyle = grad;
@@ -577,18 +762,18 @@ class RenderSystem {
             ctx.restore();
             // Face/eyes
             ctx.save();
-            ctx.translate(tx, ty-8);
+            ctx.translate(tx, ty-8 * scale);
             ctx.beginPath();
-            ctx.ellipse(-16, 7, 6, 14, 0, 0, Math.PI*2);
+            ctx.ellipse(-16 * scale, 7 * scale, 6 * scale, 14 * scale, 0, 0, Math.PI*2);
             ctx.closePath();
             ctx.fillStyle = "#111";
             ctx.fill();
             ctx.beginPath();
-            ctx.ellipse(16, 7, 6, 14, 0, 0, Math.PI*2);
+            ctx.ellipse(16 * scale, 7 * scale, 6 * scale, 14 * scale, 0, 0, Math.PI*2);
             ctx.closePath();
             ctx.fill();
             ctx.restore();
         }
     }
 }
-window.RenderSystem = RenderSystem;
+window.RenderSystem = RenderSystem;t
