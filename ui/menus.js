@@ -15,7 +15,7 @@ class MenuUI {
         let div = document.createElement('div');
         div.className = 'ui-panel';
 
-        // --- Battle menu: move to bottom third and horizontal layout ---
+        // --- Battle menu: move to below HUD, underneath the HUD ---
         // Detect if this is the battle menu by html/title
         let isBattleMenu = false;
         if (menuObj.html && menuObj.html.indexOf('Choose Action') !== -1 && menuObj.list && menuObj.list.length === 5) {
@@ -40,6 +40,10 @@ class MenuUI {
                 b.disabled = false;
                 b.tabIndex = 0;
                 b.style.pointerEvents = 'auto';
+                // --- Make battle menu buttons blue ---
+                if (isBattleMenu) {
+                    b.classList.add('battle-blue-btn');
+                }
                 div.appendChild(b);
             });
         }
@@ -72,26 +76,19 @@ class MenuUI {
         // Make sure the panel allows pointer events for its children (buttons)
         div.style.pointerEvents = 'auto';
 
-        // --- Move battle menu to below the canvas ---
+        // --- Move battle menu to directly below the HUD (underneath the HUD) ---
         if (isBattleMenu) {
             div.style.position = 'fixed';
             div.style.top = 'unset';
             div.style.bottom = 'unset';
-            div.style.left = '50%';
-            div.style.transform = 'translate(-50%, 0)';
+            // We'll set .battle-menu-panel's left/top in JS below
             div.style.minWidth = 'unset';
             div.style.maxWidth = 'unset';
             div.style.width = 'auto';
             div.style.padding = '24px 28px 18px 28px';
         } else {
-            // --- For all other menus: move panel OUTSIDE the playable canvas area ---
-            // Place menu panel below the canvas, centered horizontally
+            // --- For all other menus: move panel OUTSIDE the playable canvas area (below canvas) ---
             div.style.position = 'fixed';
-            // Instead of top:24px, use top based on canvas position + canvas height + spacing
-            // But since the overlay is inside #game-container, we want to place the menu below #game-container
-            // So we append the menu to document.body, not uiRoot, and position it below #game-container
-
-            // We'll handle this below after appending to DOM (so we can measure #game-container)
             div.style.top = 'unset';
             div.style.bottom = 'unset';
             div.style.left = '50%';
@@ -107,9 +104,43 @@ class MenuUI {
         // All menus (including battle) are now appended to body and positioned below the canvas
         document.body.appendChild(div);
 
-        // After appending, position below #game-container
+        // After appending, position below #game-container or below HUD for battle menu
         const gameContainer = document.getElementById('game-container');
-        if (gameContainer) {
+        if (isBattleMenu) {
+            setTimeout(() => {
+                const hudDiv = document.querySelector('.ui-hud');
+                if (hudDiv && div) {
+                    const hudRect = hudDiv.getBoundingClientRect();
+                    // --- Position battle menu LEFT under the canvas (left-aligned with canvas) ---
+                    // Instead of centered under HUD, align left edge with canvas + margin
+                    if (gameContainer) {
+                        const rect = gameContainer.getBoundingClientRect();
+                        // Place menu 18px below canvas, 32px from left edge of canvas
+                        div.style.top = (rect.bottom + 18) + 'px';
+                        // Move to the left side: 32px from left edge of canvas, then move 100px more to the left (user request: move left by 100px)
+                        div.style.left = (rect.left + 32 - 100) + 'px'; // move 100px to the left
+                        div.style.transform = 'none';
+                        div.style.position = 'fixed';
+                        div.style.zIndex = '2000';
+                    } else {
+                        // Fallback: place below canvas, left-aligned
+                        div.style.top = (hudRect.bottom + 18) + 'px';
+                        div.style.left = (hudRect.left - 100) + 'px'; // move 100px to the left
+                        div.style.transform = 'none';
+                        div.style.position = 'fixed';
+                        div.style.zIndex = '2000';
+                    }
+                } else if (gameContainer && div) {
+                    // Fallback: place below canvas, left-aligned
+                    const rect = gameContainer.getBoundingClientRect();
+                    div.style.top = (rect.bottom + 220) + 'px';
+                    div.style.left = (rect.left + 32 - 100) + 'px'; // move 100px to the left
+                    div.style.transform = 'none';
+                    div.style.position = 'fixed';
+                    div.style.zIndex = '2000';
+                }
+            }, 0);
+        } else if (gameContainer) {
             const rect = gameContainer.getBoundingClientRect();
             // Place menu 24px below the canvas
             div.style.top = (rect.bottom + 24) + 'px';
@@ -117,6 +148,31 @@ class MenuUI {
             div.style.transform = 'translate(-50%, 0)';
             div.style.position = 'fixed';
             div.style.zIndex = '2000';
+        }
+
+        // --- Ensure battle menu is always left-aligned under the canvas (repeat for robustness) ---
+        if (isBattleMenu) {
+            setTimeout(() => {
+                const hudDiv = document.querySelector('.ui-hud');
+                if (hudDiv && div) {
+                    const gameContainer = document.getElementById('game-container');
+                    if (gameContainer) {
+                        const rect = gameContainer.getBoundingClientRect();
+                        div.style.top = (rect.bottom + 18) + 'px';
+                        // Move to the left side: 32px from left edge of canvas, then move 100px more to the left
+                        div.style.left = (rect.left + 32 - 100) + 'px';
+                        div.style.transform = 'none';
+                        div.style.position = 'fixed';
+                        div.style.zIndex = '2000';
+                    }
+                }
+            }, 1);
+        }
+
+        // --- Move the entire battle menu panel 300px to the LEFT (for "Choose Action") ---
+        if (isBattleMenu) {
+            // Move the panel 300px to the left (opposite direction of HUD)
+            div.style.left = (parseInt(div.style.left, 10) - 300) + 'px';
         }
 
         div.focus();
